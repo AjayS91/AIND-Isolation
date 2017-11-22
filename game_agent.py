@@ -3,6 +3,7 @@ test your agent's strength against a set of known agents using tournament.py
 and include the results in your report.
 """
 import random
+import math
 
 
 class SearchTimeout(Exception):
@@ -35,7 +36,13 @@ def custom_score(game, player):
         The heuristic value of the current game state to the specified player.
     """
     # TODO: finish this function!
-    raise NotImplementedError
+    # raise NotImplementedError
+    if game.is_loser(player) or game.is_winner(player):
+        return game.utility(player)
+
+    my_moves = len(game.get_legal_moves(player))
+    next_moves = len(game.get_legal_moves(game.get_opponent(player)))
+    return float(my_moves - (1.5 * next_moves))
 
 
 def custom_score_2(game, player):
@@ -61,7 +68,13 @@ def custom_score_2(game, player):
         The heuristic value of the current game state to the specified player.
     """
     # TODO: finish this function!
-    raise NotImplementedError
+    # raise NotImplementedError
+    if game.is_loser(player) or game.is_winner(player):
+        return game.utility(player)
+
+    my_moves = len(game.get_legal_moves(player))
+    next_moves = len(game.get_legal_moves(game.get_opponent(player)))
+    return float(1.5*(my_moves*my_moves) -  next_moves*next_moves)
 
 
 def custom_score_3(game, player):
@@ -87,7 +100,14 @@ def custom_score_3(game, player):
         The heuristic value of the current game state to the specified player.
     """
     # TODO: finish this function!
-    raise NotImplementedError
+    # raise NotImplementedError
+
+    if game.is_loser(player) or game.is_winner(player):
+        return game.utility(player)
+
+    my_moves = len(game.get_legal_moves(player))
+    next_moves = len(game.get_legal_moves(game.get_opponent(player)))
+    return float((my_moves * my_moves)- (1.5*(next_moves * next_moves)))
 
 
 class IsolationPlayer:
@@ -112,6 +132,7 @@ class IsolationPlayer:
         positive value large enough to allow the function to return before the
         timer expires.
     """
+
     def __init__(self, search_depth=3, score_fn=custom_score, timeout=10.):
         self.search_depth = search_depth
         self.score = score_fn
@@ -170,6 +191,42 @@ class MinimaxPlayer(IsolationPlayer):
         # Return the best move from the last completed search iteration
         return best_move
 
+    def minimax_util(self, game, depth):
+
+        if self.time_left() < self.TIMER_THRESHOLD:
+            raise SearchTimeout()
+
+        best_move = (-1, -1)
+        current_score = None
+        type_function = None
+
+        # If is leaf Node,return move and assigned value
+        if depth == 0:
+            return (game.get_player_location(self), self.score(game, self))
+
+        # If It's MAX player
+        if game.active_player == self:
+            current_score = float("-inf")
+            type_function = max
+        # If its MIN player
+        else:
+            current_score = float("inf")
+            type_function = min
+
+        for move in game.get_legal_moves():
+            child = game.forecast_move(move)
+            # It will recursively call minimax_util to find best score
+            # according the level(type of function,MIN or MAX)
+            score = self.minimax_util(child, depth - 1)[1]
+            # It will call assign function to find MAX or MIN value from current score and computed score
+            # If it fulfill the condition, It will update move and score to
+            # propagate to upper level.
+            if type_function(current_score, score) == score:
+                best_move = move
+                current_score = score
+
+        return (best_move, current_score)
+
     def minimax(self, game, depth):
         """Implement depth-limited minimax search algorithm as described in
         the lectures.
@@ -213,7 +270,8 @@ class MinimaxPlayer(IsolationPlayer):
             raise SearchTimeout()
 
         # TODO: finish this function!
-        raise NotImplementedError
+        # raise NotImplementedError
+        return self.minimax_util(game, depth)[0]
 
 
 class AlphaBetaPlayer(IsolationPlayer):
@@ -255,7 +313,75 @@ class AlphaBetaPlayer(IsolationPlayer):
         self.time_left = time_left
 
         # TODO: finish this function!
-        raise NotImplementedError
+        # raise NotImplementedError
+        best_move = (-1, -1)
+        # It search in iterative deepening search fashion till the time
+        # exhausted.
+        i = 1
+        while True:
+            try:
+                best_move = self.alphabeta(game, i)
+                i = i + 1
+            except SearchTimeout:
+                break
+        return best_move
+
+    def alphabeta_util(self, game, depth, type_of_player, alpha=float("-inf"), beta=float("inf")):
+
+        if self.time_left() < self.TIMER_THRESHOLD:
+            raise SearchTimeout()
+
+        list_of_moves_available = game.get_legal_moves()
+
+        # if current node is leaf node or depth == 0
+        if (not list_of_moves_available) or (depth == 0):
+            if type_of_player:
+                return (self.score(game, game.active_player), (-1, -1))
+            else:
+                return (self.score(game, game.inactive_player), (-1, -1))
+
+        best_move = list_of_moves_available[0]
+        if type_of_player:
+            best_score = float("-inf")
+            for move in list_of_moves_available:
+                child = game.forecast_move(move)
+                child_score, next_move = self.alphabeta_util(
+                    child, depth - 1, False, alpha, beta)
+
+                if child_score >= best_score:
+                    best_score = child_score
+
+                # if best_score is greater or equal than  beta,Prune siblings
+                # brances
+                if best_score >= beta:
+                    return best_score, move
+
+                # if best_score is greater than alpha,update move and alpha
+                if best_score > alpha:
+                    best_move = move
+                    alpha = best_score
+
+        else:
+            best_score = float("inf")
+            for move in list_of_moves_available:
+                child = game.forecast_move(move)
+                child_score, next_move = self.alphabeta_util(
+                    child, depth - 1, True, alpha, beta)
+
+                if child_score <= best_score:
+                    best_score = child_score
+
+                # if best_score is less or equal than  alpha,Prune siblings
+                # branches
+                if best_score <= alpha:
+                    return best_score, move
+
+                # if best_score is less than beta,update move and beta
+                if best_score < beta:
+                    best_move = move
+                    beta = best_score
+
+        return best_score, best_move
 
     def alphabeta(self, game, depth, alpha=float("-inf"), beta=float("inf")):
         """Implement depth-limited minimax search with alpha-beta pruning as
@@ -306,4 +432,6 @@ class AlphaBetaPlayer(IsolationPlayer):
             raise SearchTimeout()
 
         # TODO: finish this function!
-        raise NotImplementedError
+        # raise NotImplementedError
+        type_of_player = True
+        return self.alphabeta_util(game, depth, type_of_player)[1]
